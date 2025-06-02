@@ -1,0 +1,7 @@
+﻿  VideoCombiner.cpp
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(44,22): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(60,22): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(85,22): warning C4566: character represented by universal-character-name '\U0001F39E' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(85,22): warning C4566: character represented by universal-character-name '\uFE0F' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(88,18): warning C4566: character represented by universal-character-name '\u2705' cannot be represented in the current code page (1252)
+  VideoCombiner.vcxproj -> C:\Users\HB Production\source\repos\VideoCombiner\x64\Debug\VideoCombiner.exe
