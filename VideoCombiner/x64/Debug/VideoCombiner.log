@@ -1,0 +1,11 @@
+﻿  VideoCombiner.cpp
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(47,22): warning C4566: character represented by universal-character-name '\u26A0' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(47,22): warning C4566: character represented by universal-character-name '\uFE0F' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(62,22): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(89,26): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(94,26): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(115,26): warning C4566: character represented by universal-character-name '\u274C' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(135,22): warning C4566: character represented by universal-character-name '\U0001F39E' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(135,22): warning C4566: character represented by universal-character-name '\uFE0F' cannot be represented in the current code page (1252)
+C:\Users\HB Production\source\repos\VideoCombiner\VideoCombiner\VideoCombiner.cpp(140,18): warning C4566: character represented by universal-character-name '\u2705' cannot be represented in the current code page (1252)
+  VideoCombiner.vcxproj -> C:\Users\HB Production\source\repos\VideoCombiner\x64\Debug\VideoCombiner.exe
