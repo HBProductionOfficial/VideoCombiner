@@ -39,3 +39,19 @@ else()
 endif()
 
 install(TARGETS videocombiner RUNTIME DESTINATION bin)
+
+option(VIDEOCOMBINER_TESTS "Build the tests" OFF)
+if(VIDEOCOMBINER_TESTS)
+    enable_testing()
+    add_executable(count_vs_enumerate
+        tests/count_vs_enumerate.cpp
+        src/plan.cpp
+        src/util.cpp
+        src/config.cpp)
+    target_include_directories(count_vs_enumerate PRIVATE src)
+    target_link_libraries(count_vs_enumerate PRIVATE Threads::Threads)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+        target_link_libraries(count_vs_enumerate PRIVATE stdc++fs)
+    endif()
+    add_test(NAME combinations COMMAND count_vs_enumerate)
+endif()
