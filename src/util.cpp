@@ -9,11 +9,15 @@
 #include <sstream>
 
 #ifdef _WIN32
-#define VC_POPEN _popen
-#define VC_PCLOSE _pclose
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
-#define VC_POPEN popen
-#define VC_PCLOSE pclose
+#include <sys/wait.h>
 #endif
 
 namespace vc {
@@ -88,24 +92,105 @@ static std::string shellReady(const std::string& command) {
 #endif
 }
 
+#ifdef _WIN32
+
+std::wstring utf16(const std::string& text) {
+    if (text.empty()) return L"";
+    int size = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0);
+    std::wstring out(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), out.data(), size);
+    return out;
+}
+
+/// CreateProcess rather than system() or _popen, because neither works in a
+/// process with no console. _popen in particular returns a handle that never
+/// becomes ready, so the caller waits forever. That only shows up in the
+/// windowed build, where there is no console to inherit.
+int runWindows(const std::string& command, std::string* out) {
+    HANDLE readPipe = nullptr;
+    HANDLE writePipe = nullptr;
+
+    SECURITY_ATTRIBUTES inheritable = {};
+    inheritable.nLength = sizeof(inheritable);
+    inheritable.bInheritHandle = TRUE;
+
+    if (out) {
+        if (!CreatePipe(&readPipe, &writePipe, &inheritable, 0)) return -1;
+        // The child must not hold the read end, or reading never sees EOF.
+        SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+    }
+
+    STARTUPINFOW startup = {};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESHOWWINDOW;
+    startup.wShowWindow = SW_HIDE;
+    if (out) {
+        startup.dwFlags |= STARTF_USESTDHANDLES;
+        startup.hStdOutput = writePipe;
+        startup.hStdError = writePipe;
+        startup.hStdInput = nullptr;
+    }
+
+    // Still routed through cmd.exe so redirections in the command keep working.
+    std::wstring line = utf16("cmd.exe /C " + shellReady(command));
+    std::vector<wchar_t> mutableLine(line.begin(), line.end());
+    mutableLine.push_back(L'\0');
+
+    PROCESS_INFORMATION process = {};
+    const BOOL started = CreateProcessW(nullptr, mutableLine.data(), nullptr, nullptr,
+                                        out ? TRUE : FALSE, CREATE_NO_WINDOW,
+                                        nullptr, nullptr, &startup, &process);
+    if (writePipe) CloseHandle(writePipe);
+    if (!started) {
+        if (readPipe) CloseHandle(readPipe);
+        return -1;
+    }
+
+    if (out) {
+        char buffer[4096];
+        DWORD read = 0;
+        while (ReadFile(readPipe, buffer, sizeof(buffer), &read, nullptr) && read > 0) {
+            out->append(buffer, read);
+        }
+        CloseHandle(readPipe);
+    }
+
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD code = 1;
+    GetExitCodeProcess(process.hProcess, &code);
+    CloseHandle(process.hProcess);
+    CloseHandle(process.hThread);
+    return static_cast<int>(code);
+}
+
+#endif  // _WIN32
+
 int run(const std::string& command) {
-    return std::system(shellReady(command).c_str());
+#ifdef _WIN32
+    return runWindows(command, nullptr);
+#else
+    int status = std::system(command.c_str());
+    if (status != -1 && WIFEXITED(status)) status = WEXITSTATUS(status);
+    return status;
+#endif
 }
 
 int capture(const std::string& command, std::string& out) {
     out.clear();
-    FILE* pipe = VC_POPEN(shellReady(command).c_str(), "r");
+#ifdef _WIN32
+    return runWindows(command, &out);
+#else
+    FILE* pipe = popen(command.c_str(), "r");
     if (!pipe) return -1;
 
     std::array<char, 4096> buffer{};
     while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe)) {
         out += buffer.data();
     }
-    int status = VC_PCLOSE(pipe);
-#ifndef _WIN32
+    int status = pclose(pipe);
     if (status != -1 && WIFEXITED(status)) status = WEXITSTATUS(status);
-#endif
     return status;
+#endif
 }
 
 bool executableWorks(const std::string& exe) {

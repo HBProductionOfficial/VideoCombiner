@@ -28,6 +28,7 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "comdlg32.lib")
 
 // Without this the controls render in the pre-XP style.
 #pragma comment(linker, "\"/manifestdependency:type='win32' \
@@ -42,7 +43,22 @@ enum : int {
     CTL_PERVIDEO, CTL_LIMIT, CTL_SIZE, CTL_FIT, CTL_MANDATORY,
     CTL_SHUFFLE, CTL_SEED, CTL_OVERWRITE,
     CTL_STATUS, CTL_PROGRESS, CTL_LOG,
-    CTL_PREVIEW, CTL_START, CTL_STOP, CTL_OPEN_OUTPUT
+    CTL_PREVIEW, CTL_START, CTL_STOP, CTL_OPEN_OUTPUT,
+    // Spreadsheet export
+    CTL_SHEET_ON, CTL_SHEET_FILE, CTL_SHEET_FILE_BROWSE,
+    CTL_NAMES_FILE, CTL_NAMES_BROWSE,
+    CTL_TITLES_FILE, CTL_TITLES_BROWSE,
+    CTL_DESCS_FILE, CTL_DESCS_BROWSE,
+    CTL_SHEET_TAGS, CTL_SHEET_PLAYLIST,
+    CTL_SCHED_START, CTL_SCHED_EVERY, CTL_SHEET_PRIVACY
+};
+
+/// Controls that only make sense when the export is switched on.
+const int kSheetControls[] = {
+    CTL_SHEET_FILE, CTL_SHEET_FILE_BROWSE, CTL_NAMES_FILE, CTL_NAMES_BROWSE,
+    CTL_TITLES_FILE, CTL_TITLES_BROWSE, CTL_DESCS_FILE, CTL_DESCS_BROWSE,
+    CTL_SHEET_TAGS, CTL_SHEET_PLAYLIST, CTL_SCHED_START, CTL_SCHED_EVERY,
+    CTL_SHEET_PRIVACY
 };
 
 enum : UINT {
@@ -111,6 +127,31 @@ bool pickFolder(HWND owner, std::wstring& chosen) {
         dialog->Release();
     }
     return picked;
+}
+
+/// One file, either to read or to write. `filter` is the usual double null
+/// terminated pair list.
+bool pickFile(HWND owner, bool saving, const wchar_t* filter,
+              const wchar_t* defaultExtension, std::wstring& chosen) {
+    wchar_t buffer[MAX_PATH] = {};
+    if (!chosen.empty() && chosen.size() < MAX_PATH) {
+        wcscpy_s(buffer, chosen.c_str());
+    }
+
+    OPENFILENAMEW dialog = {};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.hwndOwner = owner;
+    dialog.lpstrFilter = filter;
+    dialog.lpstrFile = buffer;
+    dialog.nMaxFile = MAX_PATH;
+    dialog.lpstrDefExt = defaultExtension;
+    dialog.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR |
+                   (saving ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST);
+
+    const BOOL ok = saving ? GetSaveFileNameW(&dialog) : GetOpenFileNameW(&dialog);
+    if (!ok) return false;
+    chosen = buffer;
+    return true;
 }
 
 // ----------------------------------------------------------------- window --
@@ -197,7 +238,39 @@ public:
         cfg.shuffle = IsDlgButtonChecked(window, CTL_SHUFFLE) == BST_CHECKED;
         cfg.overwrite = IsDlgButtonChecked(window, CTL_OVERWRITE) == BST_CHECKED;
         cfg.seed = (unsigned)_wtoi(controlText(window, CTL_SEED).c_str());
+
+        if (IsDlgButtonChecked(window, CTL_SHEET_ON) == BST_CHECKED) {
+            cfg.exportPath = narrow(controlText(window, CTL_SHEET_FILE));
+            cfg.namesFile = narrow(controlText(window, CTL_NAMES_FILE));
+            cfg.titleVariantsFile = narrow(controlText(window, CTL_TITLES_FILE));
+            cfg.descriptionVariantsFile = narrow(controlText(window, CTL_DESCS_FILE));
+            cfg.sheetTags = narrow(controlText(window, CTL_SHEET_TAGS));
+            cfg.sheetPlaylist = narrow(controlText(window, CTL_SHEET_PLAYLIST));
+            cfg.scheduleStart = narrow(controlText(window, CTL_SCHED_START));
+
+            const long long every =
+                vc::parseDuration(narrow(controlText(window, CTL_SCHED_EVERY)));
+            cfg.scheduleEvery = every > 0 ? every : 0;
+
+            const int privacy =
+                (int)SendDlgItemMessageW(window, CTL_SHEET_PRIVACY, CB_GETCURSEL, 0, 0);
+            if (privacy >= 0) {
+                wchar_t buffer[32] = {};
+                SendDlgItemMessageW(window, CTL_SHEET_PRIVACY, CB_GETLBTEXT, privacy,
+                                    (LPARAM)buffer);
+                cfg.sheetPrivacy = narrow(buffer);
+            }
+        }
         return cfg;
+    }
+
+    /// The export fields mean nothing unless the box is ticked, so they follow
+    /// it rather than sitting there looking editable.
+    void updateSheetEnabled() {
+        const bool on = IsDlgButtonChecked(window, CTL_SHEET_ON) == BST_CHECKED;
+        for (int id : kSheetControls) {
+            EnableWindow(GetDlgItem(window, id), on && !running);
+        }
     }
 
     void setStatus(const std::wstring& text) {
@@ -273,10 +346,11 @@ public:
         for (int id : {CTL_INPUT_BROWSE, CTL_OUTPUT_BROWSE, CTL_START, CTL_PREVIEW,
                        CTL_SELECT_ALL, CTL_SELECT_NONE, CTL_LIST, CTL_PERVIDEO,
                        CTL_LIMIT, CTL_SIZE, CTL_FIT, CTL_MANDATORY, CTL_SHUFFLE,
-                       CTL_SEED, CTL_OVERWRITE, CTL_INPUT, CTL_OUTPUT}) {
+                       CTL_SEED, CTL_OVERWRITE, CTL_INPUT, CTL_OUTPUT, CTL_SHEET_ON}) {
             EnableWindow(GetDlgItem(window, id), !busy);
         }
         EnableWindow(GetDlgItem(window, CTL_STOP), busy);
+        updateSheetEnabled();
     }
 
     void startRun(bool dryRun) {
@@ -356,40 +430,40 @@ void buildLayout(HWND window, App& app) {
     const int labelWidth = 92;
     const int rowHeight = 24;
     const int fullWidth = 700 - margin * 2;
+    const int right = margin + fullWidth;
+    const int col2 = margin + 330;
     int y = margin;
 
     addControl(window, L"STATIC", L"Clips folder", SS_LEFT, margin, y + 4, labelWidth, 18, -1, font);
     addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
                margin + labelWidth, y, fullWidth - labelWidth - 90, 22, CTL_INPUT, font);
-    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON,
-               margin + fullWidth - 84, y - 1, 84, 24, CTL_INPUT_BROWSE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_INPUT_BROWSE, font);
     y += rowHeight + 6;
 
     addControl(window, L"STATIC", L"Output folder", SS_LEFT, margin, y + 4, labelWidth, 18, -1, font);
     addControl(window, L"EDIT", L"output", WS_BORDER | ES_AUTOHSCROLL,
                margin + labelWidth, y, fullWidth - labelWidth - 90, 22, CTL_OUTPUT, font);
-    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON,
-               margin + fullWidth - 84, y - 1, 84, 24, CTL_OUTPUT_BROWSE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_OUTPUT_BROWSE, font);
     y += rowHeight + 10;
 
     addControl(window, L"STATIC", L"Clips to use", SS_LEFT, margin, y, 200, 18, -1, font);
-    addControl(window, L"BUTTON", L"Tick all", BS_PUSHBUTTON,
-               margin + fullWidth - 176, y - 4, 84, 24, CTL_SELECT_ALL, font);
-    addControl(window, L"BUTTON", L"Tick none", BS_PUSHBUTTON,
-               margin + fullWidth - 84, y - 4, 84, 24, CTL_SELECT_NONE, font);
+    addControl(window, L"BUTTON", L"Tick all", BS_PUSHBUTTON, right - 176, y - 4, 84, 24,
+               CTL_SELECT_ALL, font);
+    addControl(window, L"BUTTON", L"Tick none", BS_PUSHBUTTON, right - 84, y - 4, 84, 24,
+               CTL_SELECT_NONE, font);
     y += 24;
 
     HWND list = addControl(window, WC_LISTVIEWW, L"",
                            LVS_REPORT | LVS_NOCOLUMNHEADER | LVS_SHOWSELALWAYS | WS_BORDER,
-                           margin, y, fullWidth, 150, CTL_LIST, font);
+                           margin, y, fullWidth, 120, CTL_LIST, font);
     ListView_SetExtendedListViewStyle(list, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT);
     LVCOLUMNW column = {};
     column.mask = LVCF_WIDTH;
     column.cx = fullWidth - 24;
     ListView_InsertColumn(list, 0, &column);
-    y += 160;
-
-    const int col2 = margin + 330;
+    y += 130;
 
     addControl(window, L"STATIC", L"Clips per video", SS_LEFT, margin, y + 4, 100, 18, -1, font);
     HWND perVideo = addControl(window, L"COMBOBOX", L"", CBS_DROPDOWN | WS_VSCROLL,
@@ -400,10 +474,10 @@ void buildLayout(HWND window, App& app) {
     SetWindowTextW(perVideo, L"3");
 
     addControl(window, L"STATIC", L"Limit", SS_LEFT, col2, y + 4, 40, 18, -1, font);
-    addControl(window, L"EDIT", L"50", WS_BORDER | ES_NUMBER,
-               col2 + 44, y, 80, 22, CTL_LIMIT, font);
-    addControl(window, L"STATIC", L"0 means every one", SS_LEFT,
-               col2 + 132, y + 4, 150, 18, -1, font);
+    addControl(window, L"EDIT", L"50", WS_BORDER | ES_NUMBER, col2 + 44, y, 80, 22,
+               CTL_LIMIT, font);
+    addControl(window, L"STATIC", L"0 means every one", SS_LEFT, col2 + 132, y + 4, 150, 18,
+               -1, font);
     y += rowHeight + 6;
 
     addControl(window, L"STATIC", L"Output size", SS_LEFT, margin, y + 4, 100, 18, -1, font);
@@ -437,7 +511,68 @@ void buildLayout(HWND window, App& app) {
     addControl(window, L"BUTTON", L"Overwrite", BS_AUTOCHECKBOX, col2 + 228, y + 2, 90, 20,
                CTL_OVERWRITE, font);
     CheckDlgButton(window, CTL_SHUFFLE, BST_CHECKED);
-    y += rowHeight + 10;
+    y += rowHeight + 12;
+
+    // ------------------------------------------------- spreadsheet export --
+    addControl(window, L"BUTTON",
+               L"Also write a spreadsheet of these videos for an uploader",
+               BS_AUTOCHECKBOX, margin, y, 420, 20, CTL_SHEET_ON, font);
+    y += 26;
+
+    const int sheetLabel = 104;
+    const int sheetEditX = margin + sheetLabel + 4;
+    const int sheetEditW = fullWidth - sheetLabel - 94;
+
+    addControl(window, L"STATIC", L"Sheet file", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"shorts.csv", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, sheetEditW, 22, CTL_SHEET_FILE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_SHEET_FILE_BROWSE, font);
+    y += 28;
+
+    addControl(window, L"STATIC", L"Clip names", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, sheetEditW, 22, CTL_NAMES_FILE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_NAMES_BROWSE, font);
+    y += 28;
+
+    addControl(window, L"STATIC", L"Titles", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, sheetEditW, 22, CTL_TITLES_FILE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_TITLES_BROWSE, font);
+    y += 28;
+
+    addControl(window, L"STATIC", L"Descriptions", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, sheetEditW, 22, CTL_DESCS_FILE, font);
+    addControl(window, L"BUTTON", L"Browse", BS_PUSHBUTTON, right - 84, y - 1, 84, 24,
+               CTL_DESCS_BROWSE, font);
+    y += 30;
+
+    addControl(window, L"STATIC", L"Base tags", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, 196, 22, CTL_SHEET_TAGS, font);
+    addControl(window, L"STATIC", L"Playlist", SS_LEFT, col2 + 20, y + 4, 54, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               col2 + 78, y, 268, 22, CTL_SHEET_PLAYLIST, font);
+    y += 28;
+
+    addControl(window, L"STATIC", L"First upload", SS_LEFT, margin, y + 4, sheetLabel, 18, -1, font);
+    addControl(window, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL,
+               sheetEditX, y, 170, 22, CTL_SCHED_START, font);
+    addControl(window, L"STATIC", L"Every", SS_LEFT, margin + 294, y + 4, 44, 18, -1, font);
+    addControl(window, L"EDIT", L"8h", WS_BORDER | ES_AUTOHSCROLL,
+               margin + 340, y, 60, 22, CTL_SCHED_EVERY, font);
+    addControl(window, L"STATIC", L"Privacy", SS_LEFT, margin + 414, y + 4, 52, 18, -1, font);
+    HWND privacy = addControl(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL,
+                              margin + 470, y, 120, 200, CTL_SHEET_PRIVACY, font);
+    for (const wchar_t* choice : {L"public", L"unlisted", L"private"}) {
+        SendMessageW(privacy, CB_ADDSTRING, 0, (LPARAM)choice);
+    }
+    SendMessageW(privacy, CB_SETCURSEL, 0, 0);
+    y += 32;
 
     addControl(window, L"STATIC", L"", SS_LEFT, margin, y, fullWidth, 18, CTL_STATUS, font);
     y += 22;
@@ -447,18 +582,20 @@ void buildLayout(HWND window, App& app) {
 
     addControl(window, L"EDIT", L"",
                WS_BORDER | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
-               margin, y, fullWidth, 150, CTL_LOG, font);
-    y += 160;
+               margin, y, fullWidth, 120, CTL_LOG, font);
+    y += 130;
 
-    addControl(window, L"BUTTON", L"Open output folder", BS_PUSHBUTTON,
-               margin, y, 150, 28, CTL_OPEN_OUTPUT, font);
-    addControl(window, L"BUTTON", L"Preview", BS_PUSHBUTTON,
-               margin + fullWidth - 270, y, 84, 28, CTL_PREVIEW, font);
-    addControl(window, L"BUTTON", L"Stop", BS_PUSHBUTTON,
-               margin + fullWidth - 178, y, 84, 28, CTL_STOP, font);
-    addControl(window, L"BUTTON", L"Start", BS_DEFPUSHBUTTON,
-               margin + fullWidth - 86, y, 86, 28, CTL_START, font);
+    addControl(window, L"BUTTON", L"Open output folder", BS_PUSHBUTTON, margin, y, 150, 28,
+               CTL_OPEN_OUTPUT, font);
+    addControl(window, L"BUTTON", L"Preview", BS_PUSHBUTTON, right - 270, y, 84, 28,
+               CTL_PREVIEW, font);
+    addControl(window, L"BUTTON", L"Stop", BS_PUSHBUTTON, right - 178, y, 84, 28,
+               CTL_STOP, font);
+    addControl(window, L"BUTTON", L"Start", BS_DEFPUSHBUTTON, right - 86, y, 86, 28,
+               CTL_START, font);
     EnableWindow(GetDlgItem(window, CTL_STOP), FALSE);
+
+    app.updateSheetEnabled();
 }
 
 LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -501,6 +638,30 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
                     ListView_SetCheckState(list, i, state);
                 }
                 app->updateCounts();
+                return 0;
+            }
+            if (id == CTL_SHEET_ON) { app->updateSheetEnabled(); app->updateCounts(); return 0; }
+            if (id == CTL_SHEET_FILE_BROWSE) {
+                std::wstring chosen = controlText(window, CTL_SHEET_FILE);
+                if (pickFile(window, true,
+                             L"Spreadsheet (*.csv;*.tsv;*.json)\0*.csv;*.tsv;*.json\0"
+                             L"All files\0*.*\0",
+                             L"csv", chosen)) {
+                    SetDlgItemTextW(window, CTL_SHEET_FILE, chosen.c_str());
+                }
+                return 0;
+            }
+            if (id == CTL_NAMES_BROWSE || id == CTL_TITLES_BROWSE || id == CTL_DESCS_BROWSE) {
+                const int field = (id == CTL_NAMES_BROWSE)  ? CTL_NAMES_FILE
+                                : (id == CTL_TITLES_BROWSE) ? CTL_TITLES_FILE
+                                                            : CTL_DESCS_FILE;
+                const wchar_t* filter = (id == CTL_NAMES_BROWSE)
+                    ? L"JSON (*.json)\0*.json\0All files\0*.*\0"
+                    : L"Text (*.txt)\0*.txt\0All files\0*.*\0";
+                std::wstring chosen = controlText(window, field);
+                if (pickFile(window, false, filter, nullptr, chosen)) {
+                    SetDlgItemTextW(window, field, chosen.c_str());
+                }
                 return 0;
             }
             if (id == CTL_START)   { app->startRun(false); return 0; }
@@ -608,7 +769,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
     windowClass.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     RegisterClassExW(&windowClass);
 
-    RECT wanted = {0, 0, 700, 640};
+    RECT wanted = {0, 0, 700, 745};
     // Fixed size, so no layout code is needed when the user drags an edge.
     const DWORD style = (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX);
     AdjustWindowRect(&wanted, style, FALSE);
