@@ -299,6 +299,18 @@ int runCombiner(const Config& cfg) {
     // With 20 clips and 6840 combinations that is 20 encodes instead of 6840.
     std::vector<fs::path> sources = clips;
     const fs::path cacheDir = cfg.resolvedCacheDir();
+
+    // A cached clip is only reusable for the settings that produced it. Without
+    // this in the name, --keep-cache plus a changed --size would silently hand
+    // back clips at the old resolution.
+    std::ostringstream fingerprint;
+    fingerprint << target.width << "x" << target.height << "@" << target.fps
+                << "|fit" << static_cast<int>(cfg.fit) << "|" << cfg.padColor
+                << "|crf" << cfg.crf << "|" << cfg.preset
+                << "|" << cfg.vcodec << "|" << cfg.acodec << "|" << cfg.abitrate
+                << "|" << target.sampleRate << "|" << target.channels;
+    const std::string cacheKey = shortHash(fingerprint.str());
+
     if (willNormalize) {
         fs::create_directories(cacheDir, ec);
         if (ec) {
@@ -313,7 +325,8 @@ int runCombiner(const Config& cfg) {
             if (failed) return;
             // Same container as the output so the join can stream copy.
             fs::path dest = cacheDir /
-                (sanitizeName(usable[i].path.filename().string()) + "." + cfg.container);
+                (sanitizeName(usable[i].path.filename().string()) + "-" + cacheKey +
+                 "." + cfg.container);
             if (!fs::exists(dest)) {
                 if (!normalizeClip(cfg, usable[i], dest, target)) {
                     failed = true;

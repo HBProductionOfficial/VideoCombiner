@@ -56,4 +56,8 @@ std::string formatDuration(double seconds);
 /// of the tool writing to one output folder do not collide.
 const std::string& runToken();
 
+/// Eight hex characters derived from the text. Not cryptographic, just enough
+/// to tell one set of settings from another.
+std::string shortHash(const std::string& text);
+
 }  // namespace vc

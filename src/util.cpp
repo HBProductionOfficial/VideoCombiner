@@ -1,6 +1,7 @@
 #include "util.hpp"
 
 #include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -213,6 +214,20 @@ const std::string& runToken() {
         return out.str().substr(0, 8);
     }();
     return token;
+}
+
+std::string shortHash(const std::string& text) {
+    // FNV-1a.
+    uint64_t hash = 1469598103934665603ULL;
+    for (unsigned char c : text) {
+        hash ^= c;
+        hash *= 1099511628211ULL;
+    }
+    std::ostringstream out;
+    out << std::hex << hash;
+    std::string hex = out.str();
+    while (hex.size() < 8) hex.insert(hex.begin(), '0');
+    return hex.substr(0, 8);
 }
 
 std::string formatDuration(double seconds) {
