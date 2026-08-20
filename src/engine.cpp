@@ -184,6 +184,26 @@ RunStats run(const Config& cfg, const Callbacks& callbacks) {
         }
     }
 
+    // Clips can agree on format and still sit at wildly different volumes,
+    // which is audible as a jump at every cut. That only matters when nothing
+    // else has already forced a conversion, so the measurement is done lazily.
+    if (matchesTarget && uniform && cfg.loudness != 0) {
+        report.step("Checking levels", 0, static_cast<long long>(usable.size()));
+        std::atomic<long long> measured{0};
+        std::atomic<bool> levelsDiffer{false};
+        parallelFor(cfg.resolvedJobs(), usable.size(), [&](size_t i) {
+            if (usable[i].hasAudio) {
+                const double lufs = measureLoudness(cfg, usable[i].path);
+                if (lufs != 0 && std::fabs(lufs - cfg.loudness) > 1.0) levelsDiffer = true;
+            }
+            report.step("Checking levels", ++measured, static_cast<long long>(usable.size()));
+        });
+        if (levelsDiffer) {
+            matchesTarget = false;
+            report.say("Clip volumes differ from the target, so they will be evened out");
+        }
+    }
+
     bool willNormalize = false;
     switch (cfg.normalize) {
         case Config::Normalize::Always: willNormalize = true; break;
@@ -394,7 +414,8 @@ RunStats run(const Config& cfg, const Callbacks& callbacks) {
                 << "|fit" << static_cast<int>(cfg.fit) << "|" << cfg.padColor
                 << "|crf" << cfg.crf << "|" << cfg.preset
                 << "|" << cfg.vcodec << "|" << cfg.acodec << "|" << cfg.abitrate
-                << "|" << target.sampleRate << "|" << target.channels;
+                << "|" << target.sampleRate << "|" << target.channels
+                << "|lufs" << cfg.loudness;
     const std::string cacheKey = shortHash(fingerprint.str());
 
     if (willNormalize) {

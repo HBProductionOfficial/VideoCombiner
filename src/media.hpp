@@ -35,6 +35,11 @@ struct Target {
 
 ClipInfo probeClip(const Config& cfg, const fs::path& file);
 
+/// Integrated loudness in LUFS, measured by decoding the audio. Returns 0 when
+/// it cannot be worked out, since a real reading is always negative.
+/// Costs an audio-only decode, so call it only when the answer matters.
+double measureLoudness(const Config& cfg, const fs::path& file);
+
 /// True when every clip already shares the stream parameters that the concat
 /// demuxer requires. When this is false, joining without re-encoding produces
 /// broken output rather than an error.

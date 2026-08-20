@@ -12,7 +12,7 @@
 
 namespace vc {
 
-const char* kVersion = "2.0.0";
+const char* kVersion = "2.2.0";
 
 int Config::resolvedJobs() const {
     if (jobs > 0) return jobs;
@@ -178,6 +178,10 @@ ENCODING
       --vcodec NAME       Video encoder                        (default: libx264)
       --acodec NAME       Audio encoder                        (default: aac)
       --abitrate RATE     Audio bitrate                        (default: 192k)
+      --loudness LUFS     Even out volume between clips        (default: -14)
+                          -14 is what YouTube normalises to. Pass off to leave
+                          the audio alone.
+      --no-loudness       Same as --loudness off
 
 SPREADSHEET EXPORT
       --export FILE       Write one row per video, ready to paste into an
@@ -309,6 +313,14 @@ static bool loadConfigFile(const fs::path& path, Config& cfg, bool required) {
     if (root.has("vcodec"))        cfg.vcodec = root["vcodec"].asString();
     if (root.has("acodec"))        cfg.acodec = root["acodec"].asString();
     if (root.has("abitrate"))      cfg.abitrate = root["abitrate"].asString();
+    if (root.has("loudness")) {
+        if (root["loudness"].type() == json::Type::String) {
+            const std::string text = toLower(root["loudness"].asString());
+            cfg.loudness = (text == "off" || text == "none") ? 0 : std::atof(text.c_str());
+        } else {
+            cfg.loudness = root["loudness"].asNumber(-14.0);
+        }
+    }
     if (root.has("ffmpeg"))        cfg.ffmpeg = root["ffmpeg"].asString();
     if (root.has("ffprobe"))       cfg.ffprobe = root["ffprobe"].asString();
     if (root.has("cache"))         cfg.cacheDir = root["cache"].asString();
@@ -455,6 +467,19 @@ ParseResult parseArguments(int argc, char** argv, Config& config) {
         else if (arg == "--vcodec")     config.vcodec = reader.value(arg);
         else if (arg == "--acodec")     config.acodec = reader.value(arg);
         else if (arg == "--abitrate")   config.abitrate = reader.value(arg);
+        else if (arg == "--no-loudness") config.loudness = 0;
+        else if (arg == "--loudness") {
+            const std::string text = toLower(reader.value(arg));
+            if (text == "off" || text == "none") {
+                config.loudness = 0;
+            } else {
+                config.loudness = std::atof(text.c_str());
+                if (config.loudness > 0 || config.loudness < -70) {
+                    error("--loudness expects a LUFS value between -70 and 0, or off");
+                    return ParseResult::ExitFailure;
+                }
+            }
+        }
         else if (arg == "--ffmpeg")     config.ffmpeg = reader.value(arg);
         else if (arg == "--ffprobe")    config.ffprobe = reader.value(arg);
         else if (arg == "--cache")      config.cacheDir = reader.value(arg);

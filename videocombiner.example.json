@@ -67,6 +67,10 @@
   "crf": 20,
   "preset": "veryfast",
 
+  // Even out the volume between clips. -14 LUFS is what YouTube normalises
+  // to. Use "off" to leave the audio untouched.
+  "loudness": -14,
+
   // 0 lets the tool choose based on the machine.
   "jobs": 0,
 

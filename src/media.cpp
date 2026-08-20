@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace vc {
@@ -79,6 +80,34 @@ ClipInfo probeClip(const Config& cfg, const fs::path& file) {
     }
     info.ok = true;
     return info;
+}
+
+double measureLoudness(const Config& cfg, const fs::path& file) {
+    // -vn keeps this to an audio decode. ebur128 prints its summary on stderr.
+    const std::string command = quoteArg(cfg.ffmpeg) + " -hide_banner -nostats -i " +
+                                quoteArg(file.string()) + " -vn -af ebur128 -f null - 2>&1";
+    std::string output;
+    capture(command, output);
+    if (output.empty()) return 0;
+
+    // The summary repeats per frame, so take the last reading: "I:  -23.0 LUFS".
+    double result = 0;
+    size_t at = 0;
+    while ((at = output.find("I:", at)) != std::string::npos) {
+        size_t lufs = output.find("LUFS", at);
+        if (lufs == std::string::npos) break;
+        // Guard against matching an "I:" from an unrelated line far above.
+        if (lufs - at < 24) {
+            const std::string number = output.substr(at + 2, lufs - at - 2);
+            try {
+                result = std::stod(number);
+            } catch (const std::exception&) {
+                // Not a reading, keep looking.
+            }
+        }
+        at += 2;
+    }
+    return result;
 }
 
 bool clipsAreUniform(const std::vector<ClipInfo>& clips) {
@@ -178,6 +207,16 @@ bool normalizeClip(const Config& cfg, const ClipInfo& clip, const fs::path& dest
 
     cmd << " -c:v " << cfg.vcodec << " -crf " << cfg.crf << " -preset " << cfg.preset
         << " -pix_fmt yuv420p";
+    // Clips recorded separately sit at different volumes, which is audible as a
+    // jump at every cut. Skipped for a silent source, where there is nothing to
+    // measure and loudnorm would only add gain to noise.
+    if (clip.hasAudio && cfg.loudness != 0) {
+        std::ostringstream audioFilter;
+        audioFilter << "loudnorm=I=" << std::fixed << std::setprecision(1) << cfg.loudness
+                    << ":TP=-1.5:LRA=11";
+        cmd << " -af " << quoteArg(audioFilter.str());
+    }
+
     cmd << " -c:a " << cfg.acodec << " -b:a " << cfg.abitrate
         << " -ar " << target.sampleRate << " -ac " << target.channels;
     if (!clip.hasAudio) cmd << " -shortest";

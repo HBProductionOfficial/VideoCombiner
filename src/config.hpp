@@ -54,6 +54,11 @@ struct Config {
     std::string acodec = "aac";
     std::string abitrate = "192k";
 
+    /// Target integrated loudness in LUFS, applied while converting clips so
+    /// the volume does not jump between them. 0 turns the pass off.
+    /// -14 is what YouTube normalises to.
+    double loudness = -14.0;
+
     // --------------------------------------------------------------- output
     fs::path output = "output";
     std::string container = "mp4";

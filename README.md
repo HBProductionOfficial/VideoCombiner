@@ -152,6 +152,7 @@ Run `videocombiner --help` for the full list. The ones that matter most:
 | `--fps N` | Output frame rate, defaults to the fastest clip |
 | `--container EXT` | mp4, mov, mkv or webm |
 | `--crf N` | Quality, lower is better, default 20 |
+| `--loudness LUFS` | Even out volume between clips, default -14, or `off` |
 | `--name TEMPLATE` | Output filename, see below |
 
 Output names are built from a template. `{names}` is the clip names joined
@@ -282,6 +283,14 @@ between minutes and hours on a large run.
 
 Clips with no audio get a silent track added, because mixing silent and
 non-silent sources is another way the join goes wrong.
+
+Volume is levelled at the same time. Clips recorded separately often sit at
+very different levels, which you hear as a jump at every cut. Each one is
+brought to -14 LUFS, which is what YouTube normalises to, so the finished video
+is consistent. Turn it off with `--no-loudness`.
+
+Levels are only measured when nothing else has already forced a conversion, so
+clips that already sit at the target are left alone rather than re-encoded.
 
 Control it with `--normalize`:
 
