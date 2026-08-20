@@ -62,6 +62,27 @@ struct Config {
     int jobs = 0;          // 0 means choose based on the machine
     bool dryRun = false;
 
+    // -------------------------------------------------------- sheet export
+    /// When set, a row per video is written here in the layout an uploader
+    /// spreadsheet expects.
+    fs::path exportPath;
+    std::string exportFormat;          // csv, tsv, json. Empty means by extension.
+    fs::path namesFile;                // filename to display name mapping
+    fs::path titleVariantsFile;        // one title template per line
+    fs::path descriptionVariantsFile;
+    std::string titleTemplate = "{and}";
+    std::string descriptionTemplate;
+    std::string sheetLanguage = "en";
+    std::string sheetPlaylist;
+    std::string sheetPrivacy = "public";
+    std::string sheetTags;
+    bool sheetSubtitle = false;
+    bool sheetLocalize = true;
+    /// Append each clip's name to the tag list.
+    bool clipTags = true;
+    std::string scheduleStart;         // ISO 8601, empty leaves the column blank
+    long long scheduleEvery = 0;       // seconds between videos
+
     // ----------------------------------------------------------------- misc
     std::string ffmpeg = "ffmpeg";
     std::string ffprobe = "ffprobe";
@@ -85,6 +106,10 @@ void printVersion();
 
 /// Turns a size name or a WxH string into pixels. Returns false if neither.
 bool resolveSize(const std::string& text, int& width, int& height);
+
+/// Reads "90s", "30m", "8h", "2d" or a plain number of seconds. Returns -1 when
+/// the text makes no sense.
+long long parseDuration(const std::string& text);
 
 extern const char* kVersion;
 

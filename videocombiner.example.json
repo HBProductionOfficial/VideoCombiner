@@ -68,5 +68,32 @@
   "preset": "veryfast",
 
   // 0 lets the tool choose based on the machine.
-  "jobs": 0
+  "jobs": 0,
+
+  // Write a row per video for an uploader spreadsheet. Remove this block if
+  // you only want the videos.
+  "export": "shorts.csv",
+
+  // Maps clip filenames to how they should read in a title.
+  "names": "examples/names.json",
+
+  // One title template per line, rotated across videos so they do not all
+  // share a title. Placeholders: {a} {b} {c} {names} {and} {index}
+  "titleVariants": "examples/titles.txt",
+  "descriptionVariants": "examples/descriptions.txt",
+
+  // Tags every row starts with. Each clip's name is appended after them
+  // unless clipTags is false.
+  "sheetTags": "hydraulicpress,AI,crushing",
+  "clipTags": true,
+
+  "sheetPlaylist": "Hydraulic Press Shorts",
+  "sheetLanguage": "en",
+  "sheetPrivacy": "public",
+  "sheetSubtitle": false,
+  "sheetLocalize": true,
+
+  // Spaces the scheduled times out instead of marking every row due at once.
+  "scheduleStart": "2026-09-01T14:00:00Z",
+  "scheduleEvery": "8h"
 }

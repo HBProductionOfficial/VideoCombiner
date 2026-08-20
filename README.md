@@ -159,6 +159,94 @@ together, and `{index}`, `{count}`, `{seed}`, `{first}` and `{last}` are also
 available. The default is `{names}`, so a video is named after what is in it.
 Use `{index}_{names}` if you want them to sort in generation order.
 
+## Spreadsheet export
+
+If you upload with a script that reads a Google Sheet, the gap between "the
+videos exist" and "the sheet describes them" is the tedious part. `--export`
+closes it:
+
+```
+videocombiner -i clips -o shorts --limit 50 \
+    --export shorts.csv --names names.json \
+    --title-variants titles.txt \
+    --schedule-start 2026-09-01T14:00:00Z --schedule-every 8h
+```
+
+That writes one row per video with these columns, ready to paste in:
+
+`Filename`, `Title`, `Description`, `Tags`, `Language`,
+`Scheduled Time (UTC)`, `Status`, `Playlist`, `Subtitle?`, `Localize?`,
+`Privacy`
+
+The Filename column is the actual name written to disk, so the two can never
+drift apart.
+
+It works with `--dry-run`, which means you can build the sheet, read it, and
+only then decide to render.
+
+### Readable names
+
+Clip filenames rarely belong in a title. `--names names.json` maps them:
+
+```json
+{
+  "Zibra_Zubra_Zibralini": "Zibra Zubra Zibralini",
+  "U_din_din_din_dun":     "U Din Din Din Dun"
+}
+```
+
+Without it the tool still tidies underscores into spaces, but the mapping is
+there for when that is not enough.
+
+### Title and description variants
+
+Giving hundreds of videos the same title works against you. Put one template
+per line in a file and each video draws from the pool:
+
+```
+Crushing {and} Under a Hydraulic Press!
+{a} vs {b} vs {c}: Hydraulic Press Edition
+Can {a} Survive the Press? Feat. {b} and {c}
+{a} Gets Flattened, {b} and {c} Are Next
+```
+
+Placeholders:
+
+| Placeholder | Becomes |
+|---|---|
+| `{a}` `{b}` `{c}` | each clip, in play order |
+| `{clip1}` `{clip2}` | the same, numbered |
+| `{names}` | all clips, comma separated |
+| `{and}` | all clips, with "and" before the last |
+| `{filename}` `{index}` `{count}` `{seed}` | the obvious |
+
+The choice is deterministic from the seed, so the same run always produces the
+same titles. Titles longer than 100 characters are cut, since YouTube rejects
+them.
+
+`--description-variants` works the same way for descriptions.
+
+### Scheduling
+
+`--schedule-start` and `--schedule-every` fill the schedule column with spaced
+times, so an uploader that posts the next due video actually spreads them out
+rather than treating every row as due at once.
+
+```
+--schedule-start 2026-09-01T14:00:00Z --schedule-every 8h
+```
+
+Durations take `s`, `m`, `h`, `d` or `w`.
+
+### The rest of the columns
+
+`--sheet-tags` sets the tags every row starts with, and each clip's name is
+appended after them unless you pass `--no-clip-tags`. `--sheet-playlist`,
+`--sheet-language`, `--sheet-privacy`, `--sheet-subtitle` and
+`--no-sheet-localize` fill the others.
+
+There are working example files in `examples/`.
+
 ## Config file
 
 Flags get tedious once you have settled on your setup. Put a

@@ -4,6 +4,7 @@
 #include "util.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -77,6 +78,29 @@ bool resolveSize(const std::string& text, int& width, int& height) {
     width = w;
     height = h;
     return true;
+}
+
+long long parseDuration(const std::string& text) {
+    const std::string trimmed = trim(text);
+    if (trimmed.empty()) return -1;
+
+    size_t digits = 0;
+    while (digits < trimmed.size() && std::isdigit(static_cast<unsigned char>(trimmed[digits]))) {
+        ++digits;
+    }
+    if (digits == 0) return -1;
+
+    const long long amount = std::atoll(trimmed.substr(0, digits).c_str());
+    const std::string unit = toLower(trimmed.substr(digits));
+
+    if (unit.empty() || unit == "s" || unit == "sec" || unit == "secs") return amount;
+    if (unit == "m" || unit == "min" || unit == "mins") return amount * 60;
+    if (unit == "h" || unit == "hr" || unit == "hrs" || unit == "hour" || unit == "hours") {
+        return amount * 3600;
+    }
+    if (unit == "d" || unit == "day" || unit == "days") return amount * 86400;
+    if (unit == "w" || unit == "week" || unit == "weeks") return amount * 604800;
+    return -1;
 }
 
 // ------------------------------------------------------------------- help --
@@ -155,6 +179,38 @@ ENCODING
       --acodec NAME       Audio encoder                        (default: aac)
       --abitrate RATE     Audio bitrate                        (default: 192k)
 
+SPREADSHEET EXPORT
+      --export FILE       Write one row per video, ready to paste into an
+                          uploader spreadsheet. Columns are Filename, Title,
+                          Description, Tags, Language, Scheduled Time, Status,
+                          Playlist, Subtitle?, Localize?, Privacy.
+                          Works with --dry-run, so the sheet can be built and
+                          checked before any video is rendered.
+      --export-format F   csv, tsv or json      (default: from the extension)
+      --names FILE        JSON mapping a clip filename to how it should read in
+                          a title, for example Zibra_Zubra to "Zibra Zubra".
+      --title TEMPLATE    Title for every row               (default: {and})
+      --title-variants F  One title template per line, rotated across rows so
+                          videos do not all share a title. Beats --title.
+      --description TEXT      Description for every row
+      --description-variants F  One description template per line
+                          Placeholders in all four:
+                            {a} {b} {c} ...  each clip, in play order
+                            {clip1} {clip2}  the same, numbered
+                            {names}          all clips, comma separated
+                            {and}            all clips, with "and" before the last
+                            {filename} {index} {count} {seed}
+      --schedule-start T  First scheduled time, ISO 8601, for example
+                          2026-09-01T14:00:00Z. Blank leaves the column empty.
+      --schedule-every D  Gap between videos: 90s, 30m, 8h, 2d
+      --sheet-tags LIST   Tags every row starts with, comma separated
+      --no-clip-tags      Do not append each clip's name to the tags
+      --sheet-language C  Language column                   (default: en)
+      --sheet-playlist P  Playlist column
+      --sheet-privacy P   public, unlisted or private       (default: public)
+      --sheet-subtitle    Set the Subtitle? column to yes   (default: no)
+      --no-sheet-localize Set the Localize? column to no    (default: yes)
+
 GENERAL
   -c, --config FILE       Config file (default: videocombiner.json if present)
       --ffmpeg PATH       Path to ffmpeg                       (default: ffmpeg)
@@ -181,6 +237,15 @@ EXAMPLES
 
   # regular widescreen video at 60fps
   videocombiner -i clips -s youtube --fps 60
+
+  # build the videos and the spreadsheet rows to upload them with
+  videocombiner -i clips -o shorts --limit 50 \
+      --export shorts.csv --names names.json \
+      --title-variants titles.txt \
+      --schedule-start 2026-09-01T14:00:00Z --schedule-every 8h
+
+  # check the spreadsheet before rendering anything
+  videocombiner -i clips --limit 50 --export shorts.csv --dry-run
 
 A config file lets you skip the flags entirely. See videocombiner.example.json.
 Command-line options always win over the config file.
@@ -255,6 +320,35 @@ static bool loadConfigFile(const fs::path& path, Config& cfg, bool required) {
         else if (mode == "never") cfg.normalize = Config::Normalize::Never;
         else cfg.normalize = Config::Normalize::Auto;
     }
+    if (root.has("export"))        cfg.exportPath = root["export"].asString();
+    if (root.has("exportFormat"))  cfg.exportFormat = toLower(root["exportFormat"].asString());
+    if (root.has("names"))         cfg.namesFile = root["names"].asString();
+    if (root.has("title"))         cfg.titleTemplate = root["title"].asString();
+    if (root.has("titleVariants")) cfg.titleVariantsFile = root["titleVariants"].asString();
+    if (root.has("description"))   cfg.descriptionTemplate = root["description"].asString();
+    if (root.has("descriptionVariants")) {
+        cfg.descriptionVariantsFile = root["descriptionVariants"].asString();
+    }
+    if (root.has("sheetTags"))     cfg.sheetTags = root["sheetTags"].asString();
+    if (root.has("clipTags"))      cfg.clipTags = root["clipTags"].asBool(true);
+    if (root.has("sheetLanguage")) cfg.sheetLanguage = root["sheetLanguage"].asString();
+    if (root.has("sheetPlaylist")) cfg.sheetPlaylist = root["sheetPlaylist"].asString();
+    if (root.has("sheetPrivacy"))  cfg.sheetPrivacy = toLower(root["sheetPrivacy"].asString());
+    if (root.has("sheetSubtitle")) cfg.sheetSubtitle = root["sheetSubtitle"].asBool();
+    if (root.has("sheetLocalize")) cfg.sheetLocalize = root["sheetLocalize"].asBool(true);
+    if (root.has("scheduleStart")) cfg.scheduleStart = root["scheduleStart"].asString();
+    if (root.has("scheduleEvery")) {
+        const std::string text = root["scheduleEvery"].type() == json::Type::Number
+            ? std::to_string(root["scheduleEvery"].asInt())
+            : root["scheduleEvery"].asString();
+        const long long seconds = parseDuration(text);
+        if (seconds < 0) {
+            error("config file: scheduleEvery expects something like 90s, 30m, 8h or 2d");
+            return false;
+        }
+        cfg.scheduleEvery = seconds;
+    }
+
     if (root.has("padColor"))  cfg.padColor = root["padColor"].asString();
     if (root.has("container")) cfg.container = toLower(root["container"].asString());
 
@@ -365,6 +459,29 @@ ParseResult parseArguments(int argc, char** argv, Config& config) {
         else if (arg == "--ffprobe")    config.ffprobe = reader.value(arg);
         else if (arg == "--cache")      config.cacheDir = reader.value(arg);
         else if (arg == "--keep-cache") config.keepCache = true;
+        else if (arg == "--export")               config.exportPath = reader.value(arg);
+        else if (arg == "--export-format")        config.exportFormat = toLower(reader.value(arg));
+        else if (arg == "--names")                config.namesFile = reader.value(arg);
+        else if (arg == "--title")                config.titleTemplate = reader.value(arg);
+        else if (arg == "--title-variants")       config.titleVariantsFile = reader.value(arg);
+        else if (arg == "--description")          config.descriptionTemplate = reader.value(arg);
+        else if (arg == "--description-variants") config.descriptionVariantsFile = reader.value(arg);
+        else if (arg == "--sheet-tags")           config.sheetTags = reader.value(arg);
+        else if (arg == "--no-clip-tags")         config.clipTags = false;
+        else if (arg == "--sheet-language")       config.sheetLanguage = reader.value(arg);
+        else if (arg == "--sheet-playlist")       config.sheetPlaylist = reader.value(arg);
+        else if (arg == "--sheet-privacy")        config.sheetPrivacy = toLower(reader.value(arg));
+        else if (arg == "--sheet-subtitle")       config.sheetSubtitle = true;
+        else if (arg == "--no-sheet-localize")    config.sheetLocalize = false;
+        else if (arg == "--schedule-start")       config.scheduleStart = reader.value(arg);
+        else if (arg == "--schedule-every") {
+            const long long seconds = parseDuration(reader.value(arg));
+            if (seconds < 0) {
+                error("--schedule-every expects something like 90s, 30m, 8h or 2d");
+                return ParseResult::ExitFailure;
+            }
+            config.scheduleEvery = seconds;
+        }
         else if (arg == "-v" || arg == "--verbose") setLevel(Level::Verbose);
         else if (arg == "-q" || arg == "--quiet")   setLevel(Level::Quiet);
         else if (arg == "-h" || arg == "--help" || arg == "--version") { /* handled above */ }

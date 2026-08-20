@@ -1,6 +1,7 @@
 #include "engine.hpp"
 
 #include "plan.hpp"
+#include "sheet.hpp"
 #include "util.hpp"
 
 #include <algorithm>
@@ -273,11 +274,66 @@ RunStats run(const Config& cfg, const Callbacks& callbacks) {
     fs::create_directories(cfg.output, ec);
     if (ec) return fail("cannot create output folder " + cfg.output.string() + ": " + ec.message());
 
+    // Anything the spreadsheet export needs, loaded once before the loop so a
+    // bad file is reported before work starts rather than half way through.
+    NameMap displayNames;
+    std::vector<std::string> titleVariants;
+    std::vector<std::string> descriptionVariants;
+    std::vector<SheetRow> sheetRows;
+    if (!cfg.exportPath.empty()) {
+        if (!loadNameMap(cfg.namesFile, displayNames, problem)) return fail(problem);
+        if (!loadVariants(cfg.titleVariantsFile, titleVariants, problem)) return fail(problem);
+        if (!loadVariants(cfg.descriptionVariantsFile, descriptionVariants, problem)) {
+            return fail(problem);
+        }
+        sheetRows.reserve(static_cast<size_t>(total));
+    }
+    long long titlesTrimmed = 0;
+
     std::vector<Job> jobs;
     for (long long i = 0; i < total; ++i) {
         const Combo& combo = combos[static_cast<size_t>(i)];
         std::string name = buildName(cfg.nameTemplate, clips, combo, i + 1, total, seed);
         fs::path out = cfg.output / (name + "." + cfg.container);
+
+        if (!cfg.exportPath.empty()) {
+            std::vector<std::string> clipNames;
+            clipNames.reserve(combo.size());
+            for (size_t idx : combo) {
+                clipNames.push_back(displayName(clips[idx].filename().string(), displayNames));
+            }
+
+            SheetRow row;
+            row.filename = out.filename().string();
+
+            const std::string& titleTmpl = titleVariants.empty()
+                ? cfg.titleTemplate : pickVariant(titleVariants, seed, i);
+            row.title = expandTemplate(titleTmpl, clipNames, row.filename, i + 1, total, seed);
+            // YouTube rejects anything longer, so cut here rather than letting
+            // the upload fail later.
+            if (row.title.size() > 100) {
+                row.title = row.title.substr(0, 100);
+                ++titlesTrimmed;
+            }
+
+            const std::string& descTmpl = descriptionVariants.empty()
+                ? cfg.descriptionTemplate : pickVariant(descriptionVariants, seed, i);
+            if (!descTmpl.empty()) {
+                row.description = expandTemplate(descTmpl, clipNames, row.filename,
+                                                 i + 1, total, seed);
+                if (row.description.size() > 5000) row.description.resize(5000);
+            }
+
+            row.tags = tagsFor(cfg.sheetTags, clipNames, cfg.clipTags);
+            row.language = cfg.sheetLanguage;
+            row.scheduled = scheduleFor(cfg.scheduleStart, cfg.scheduleEvery, i);
+            row.playlist = cfg.sheetPlaylist;
+            row.subtitle = cfg.sheetSubtitle ? "yes" : "no";
+            row.localize = cfg.sheetLocalize ? "yes" : "no";
+            row.privacy = cfg.sheetPrivacy;
+            sheetRows.push_back(std::move(row));
+        }
+
         if (!cfg.overwrite && fs::exists(out)) {
             ++stats.skipped;
             continue;
@@ -285,6 +341,20 @@ RunStats run(const Config& cfg, const Callbacks& callbacks) {
         jobs.push_back(Job{combo, out});
     }
     stats.planned = static_cast<long long>(jobs.size());
+
+    if (!cfg.exportPath.empty()) {
+        if (!writeSheet(cfg.exportPath, cfg.exportFormat, sheetRows, problem)) return fail(problem);
+        report.say("Wrote " + describeCount(static_cast<long long>(sheetRows.size())) +
+                   " rows to " + cfg.exportPath.string());
+        if (!cfg.scheduleStart.empty() && sheetRows.front().scheduled.empty()) {
+            report.say("warning: could not read the schedule start time, "
+                       "so that column was left blank");
+        }
+        if (titlesTrimmed > 0) {
+            report.say("warning: " + describeCount(titlesTrimmed) +
+                       " titles were cut to YouTube's 100 character limit");
+        }
+    }
 
     if (cfg.dryRun) {
         report.say("");

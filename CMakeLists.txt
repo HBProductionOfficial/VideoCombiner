@@ -23,6 +23,7 @@ set(VC_CORE
     src/engine.cpp
     src/media.cpp
     src/plan.cpp
+    src/sheet.cpp
     src/util.cpp)
 
 function(vc_configure target)
