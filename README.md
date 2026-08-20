@@ -10,14 +10,29 @@ whatever your genre is, run this, and you have months of posts.
 
 ## Install
 
-Download the binary for your platform from the
-[releases page](https://github.com/HBProductionOfficial/VideoCombiner/releases)
-and put it somewhere on your PATH.
+Download the zip for your platform from the
+[releases page](https://github.com/HBProductionOfficial/VideoCombiner/releases).
 
 You also need [ffmpeg](https://ffmpeg.org/download.html) installed, including
 `ffprobe`, which ships alongside it. On Windows `winget install Gyan.FFmpeg`
 works. On macOS `brew install ffmpeg`. On Debian or Ubuntu
 `sudo apt install ffmpeg`.
+
+## Two ways to use it
+
+The Windows zip contains two programs:
+
+**`videocombiner-gui.exe`** is the one to double-click. It opens a window: pick
+your clips folder, tick the clips you want, choose how many go into each video
+and what size to output, then press Start. It shows the clip count and how many
+videos your settings will produce before you commit to anything, and Preview
+lists exactly what it would build without building it.
+
+**`videocombiner.exe`** is the command line version, for scripting it into a
+pipeline or running it on a schedule. It also builds on macOS and Linux, where
+it is the only version.
+
+Both do exactly the same work. The window is a front end over the same engine.
 
 ## Quick start
 
@@ -196,7 +211,18 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-The binary lands in `build/` or `build/Release/` depending on your generator.
+Binaries land in `build/` or `build/Release/` depending on your generator. On
+Windows this produces both `videocombiner.exe` and `videocombiner-gui.exe`. On
+macOS and Linux it produces the command line tool only, since the window is
+plain Win32.
+
+To build and run the tests:
+
+```
+cmake -S . -B build -DVIDEOCOMBINER_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
 ## Requirements
 
