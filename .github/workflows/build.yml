@@ -1,0 +1,87 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            binary: videocombiner.exe
+          - os: ubuntu-latest
+            name: linux-x64
+            binary: videocombiner
+          - os: macos-latest
+            name: macos-arm64
+            binary: videocombiner
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Find the binary
+        shell: bash
+        run: |
+          # Multi-config generators put it in a subfolder, single-config does not.
+          found=$(find build -name '${{ matrix.binary }}' -type f | head -n 1)
+          if [ -z "$found" ]; then
+            echo "binary not found under build/"
+            find build -type f -name 'videocombiner*'
+            exit 1
+          fi
+          echo "BIN=$found" >> "$GITHUB_ENV"
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          "$BIN" --version
+          "$BIN" --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: videocombiner-${{ matrix.name }}
+          path: ${{ env.BIN }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Zip each platform
+        run: |
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            chmod +x "$dir"/* || true
+            (cd "$dir" && zip -r "../$name.zip" .)
+          done
+          ls -la
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true

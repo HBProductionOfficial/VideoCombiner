@@ -1,0 +1,72 @@
+{
+  // Copy this to videocombiner.json and edit. The tool picks it up
+  // automatically when it is in the folder you run from.
+  // Any command line option overrides what is set here.
+
+  "input": "clips",
+  "output": "shorts",
+
+  // How many clips go into each finished video.
+  "clipsPerVideo": 3,
+
+  // Stop after this many videos. Remove it to build every combination,
+  // but check the count first with --dry-run: it grows fast.
+  "limit": 50,
+
+  // Same seed gives the same set of videos every run.
+  "seed": 1234,
+
+  // true  = A,B,C and B,A,C are two different videos
+  // false = each set of clips is used once
+  "ordered": true,
+
+  // Clips that appear in every video, for example an intro or an outro.
+  "mandatory": [],
+
+  // Which files count as clips.
+  "extensions": [".mov", ".mp4", ".mkv"],
+
+  // Filename patterns to keep or drop. Both accept * and ?.
+  "include": [],
+  "exclude": ["*draft*", "*wip*"],
+
+  // Output filename, without the extension.
+  // Placeholders: {names} {index} {count} {seed} {first} {last}
+  "nameTemplate": "{index}_{names}",
+
+  // auto   = re-encode clips to a common format only when needed
+  // always = always re-encode first
+  // never  = join as-is, which is fast but breaks on mismatched clips
+  "normalize": "auto",
+
+  // A preset name or WIDTHxHEIGHT. Presets include:
+  //   vertical / tiktok / reels / shorts    1080x1920
+  //   horizontal / youtube / landscape      1920x1080
+  //   square                                1080x1080
+  //   portrait                              1080x1350
+  //   480p 720p 1080p 1440p 2160p / 4k
+  //   source                                your largest clip
+  "size": "tiktok",
+
+  // What happens to a clip that does not match the frame:
+  //   contain  whole clip visible, bars fill the rest
+  //   cover    frame filled, edges cropped off
+  //   blur     clip over a blurred zoomed copy of itself
+  //   stretch  squashed to fit
+  "fit": "cover",
+
+  // Bar colour for fit "contain". A name or a hex value.
+  "padColor": "black",
+
+  // Leave out to follow the fastest clip.
+  "fps": 30,
+
+  // mp4, mov, mkv or webm.
+  "container": "mp4",
+
+  "crf": 20,
+  "preset": "veryfast",
+
+  // 0 lets the tool choose based on the machine.
+  "jobs": 0
+}

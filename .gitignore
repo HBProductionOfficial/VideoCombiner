@@ -1,0 +1,34 @@
+# Build output
+build/
+out/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+
+# Visual Studio
+.vs/
+x64/
+Win32/
+Debug/
+Release/
+*.user
+*.suo
+*.ipch
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.tlog
+*.log
+*.exe
+*.recipe
+*.lastbuildstate
+
+# Local config and scratch data
+videocombiner.json
+testclips/
+testout/
+*.mp4
+*.mov
+*.mkv
