@@ -1,0 +1,6 @@
+# Shell scripts must keep LF. With CRLF, bash on Linux fails on the carriage
+# return and reports something unhelpful about the shebang.
+*.sh text eol=lf
+
+# Everything else can follow the platform.
+* text=auto

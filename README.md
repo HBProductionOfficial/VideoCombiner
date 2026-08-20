@@ -313,13 +313,26 @@ Windows this produces both `videocombiner.exe` and `videocombiner-gui.exe`. On
 macOS and Linux it produces the command line tool only, since the window is
 plain Win32.
 
-To build and run the tests:
+To build and run the unit tests, which check that the number of videos the tool
+predicts matches what it actually generates:
 
 ```
 cmake -S . -B build -DVIDEOCOMBINER_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+There is also a test that builds real videos and inspects them, which needs
+ffmpeg:
+
+```
+bash tests/render_smoke.sh build/videocombiner
+```
+
+It makes three clips at different sizes, frame rates and volumes, one of them
+silent, runs the tool, then checks the resolution, duration, audio presence and
+loudness of every output, and that every filename in the exported sheet exists
+on disk. CI runs it on Windows and Linux.
 
 ## Requirements
 

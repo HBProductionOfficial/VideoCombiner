@@ -17,10 +17,16 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
+            render: true
           - os: ubuntu-latest
             name: linux-x64
+            render: true
+          # No render test here. Installing ffmpeg through Homebrew pulls a long
+          # dependency chain, and the POSIX code path this would exercise is the
+          # same one the Linux job already covers.
           - os: macos-latest
             name: macos-arm64
+            render: false
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +61,25 @@ jobs:
           if [ -f dist/videocombiner.exe ]; then cli=dist/videocombiner.exe; else cli=dist/videocombiner; fi
           "$cli" --version
           "$cli" --help > /dev/null
+
+      - name: Install ffmpeg
+        if: matrix.render
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg ;;
+            Windows) choco install ffmpeg -y --no-progress ;;
+          esac
+
+      # Builds real videos and inspects them. The unit test only covers the
+      # combination maths, and every bug that has actually shipped was in this
+      # path instead.
+      - name: Render smoke test
+        if: matrix.render
+        shell: bash
+        run: |
+          if [ -f dist/videocombiner.exe ]; then cli=dist/videocombiner.exe; else cli=dist/videocombiner; fi
+          bash tests/render_smoke.sh "$cli"
 
       - uses: actions/upload-artifact@v4
         with:
