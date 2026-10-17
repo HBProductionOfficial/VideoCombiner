@@ -1,340 +1,55 @@
-# VideoCombiner
+# Video Combiner
 
-Takes a folder of clips and builds videos out of every combination of them.
-Point it at 10 clips and ask for 3 per video, and you get 720 shorts, each one
-a different ordering.
+Video Combiner takes a folder of clips and builds a video out of every combination of them. Five clips at three per video make 60 videos, each with the clips in a different order, and ten clips make 720. It's meant for shorts and TikTok channels that get a lot of uploads out of a few recorded clips.
 
-This is for repurposing a small set of clips into a lot of uploads, which is how
-a good number of shorts and TikTok channels operate. Record eight clips of
-whatever your genre is, run this, and you have months of posts.
+<p align="center">
+  <img src="docs/screenshots/window.png" width="520" alt="The Video Combiner window after building 50 videos from five clips">
+</p>
 
-## Install
+There's a Windows app and a command line tool. Both run the same engine, and the command line tool also builds on macOS and Linux.
 
-Download the zip for your platform from the
-[releases page](https://github.com/HBProductionOfficial/VideoCombiner/releases).
+## Download
 
-You also need [ffmpeg](https://ffmpeg.org/download.html) installed, including
-`ffprobe`, which ships alongside it. On Windows `winget install Gyan.FFmpeg`
-works. On macOS `brew install ffmpeg`. On Debian or Ubuntu
-`sudo apt install ffmpeg`.
+Get the zip for your system from the [releases page](https://github.com/HBProductionOfficial/VideoCombiner/releases). You also need [ffmpeg](https://ffmpeg.org/download.html) with `ffprobe`, which `winget install Gyan.FFmpeg` installs on Windows.
 
-## Two ways to use it
+## Using the window
 
-The Windows zip contains two programs:
+Open `videocombiner-gui.exe`, pick the clips folder, tick the clips you want and press Start. Before anything is built, the window tells you how many videos your settings will make, and Preview lists them without writing a file.
 
-**`videocombiner-gui.exe`** is the one to double-click. It opens a window: pick
-your clips folder, tick the clips you want, choose how many go into each video
-and what size to output, then press Start. It shows the clip count and how many
-videos your settings will produce before you commit to anything, and Preview
-lists exactly what it would build without building it.
+<p align="center">
+  <img src="docs/screenshots/output.png" width="640" alt="Four of the finished videos, each shown as its three clips in order">
+</p>
 
-**`videocombiner.exe`** is the command line version, for scripting it into a
-pipeline or running it on a schedule. It also builds on macOS and Linux, where
-it is the only version.
-
-Both do exactly the same work. The window is a front end over the same engine.
-
-## Quick start
+## Using the command line
 
 ```
-videocombiner --input clips --output shorts
+videocombiner -i clips -o shorts                      # every 3-clip ordering
+videocombiner -i clips --dry-run                      # list the plan, build nothing
+videocombiner -i clips -o shorts --limit 50 --seed 42 # 50 videos, same ones every run
+videocombiner -i clips -s tiktok --fit blur           # 1080x1920 over a blurred background
 ```
 
-That reads every clip in `clips`, builds every 3-clip ordering, and writes the
-results to `shorts`.
+`videocombiner --help` lists every option. Settings you always use can go in a `videocombiner.json` next to where you run it, and `videocombiner.example.json` shows every key.
 
-Check what you are about to get before committing to it:
+## How many videos you get
 
-```
-videocombiner --input clips --dry-run
-```
-
-Cap the number, and make the run repeatable:
-
-```
-videocombiner -i clips -o shorts --limit 50 --seed 42
-```
-
-Keep one clip in every video, such as an intro:
-
-```
-videocombiner -i clips -o shorts --mandatory intro.mov
-```
-
-Pick specific files instead of a whole folder:
-
-```
-videocombiner clipA.mov clipB.mov clipC.mov -o shorts
-```
-
-## Output size and shape
-
-By default the output matches your largest clip, so if you feed it vertical
-footage you get vertical videos out. To target a platform, name it:
-
-```
-videocombiner -i clips -s tiktok      # 1080x1920
-videocombiner -i clips -s youtube     # 1920x1080
-videocombiner -i clips -s square      # 1080x1080
-videocombiner -i clips -s 1440x1080   # or any size you want
-```
-
-| Preset | Size | Also called |
-|---|---|---|
-| `vertical` | 1080x1920 | `tiktok`, `reels`, `shorts`, `9:16` |
-| `horizontal` | 1920x1080 | `youtube`, `landscape`, `16:9` |
-| `square` | 1080x1080 | `1:1` |
-| `portrait` | 1080x1350 | `4:5` |
-| `480p` `720p` `1080p` `1440p` `2160p` | standard sizes | `4k` for 2160p |
-| `vertical720` `vertical1440` | smaller and larger vertical | |
-| `source` | your largest clip | the default |
-
-When a clip does not match the frame, `--fit` decides what happens to it. This
-matters most when you point horizontal footage at a vertical size:
-
-| `--fit` | What you get |
-|---|---|
-| `contain` | Whole clip visible, bars fill the rest. The default. |
-| `cover` | Frame filled, edges cropped away. Nothing is letterboxed. |
-| `blur` | Clip sits whole over a blurred, zoomed copy of itself. |
-| `stretch` | Squashed to fit. Aspect ratio ignored. |
-
-```
-videocombiner -i clips -s tiktok --fit cover   # crop to fill
-videocombiner -i clips -s tiktok --fit blur    # blurred background
-```
-
-Bar colour is `--pad-color`, taking a name like `white` or a hex value like
-`#101010`. Frame rate is `--fps`, and the container is `--container` for `mp4`,
-`mov`, `mkv` or `webm`.
-
-## How many videos will I get
-
-By default every ordering counts as its own video, so the count is
-`n * (n-1) * (n-2)` for 3 clips per video.
-
-| Clips in folder | 3 per video | 4 per video |
-|---|---|---|
-| 4 | 24 | 24 |
-| 5 | 60 | 120 |
-| 6 | 120 | 360 |
-| 8 | 336 | 1,680 |
-| 10 | 720 | 5,040 |
-| 15 | 2,730 | 32,760 |
-| 20 | 6,840 | 116,280 |
-
-Pass `--unordered` if you want each set of clips used once instead of in every
-order, which cuts those numbers by a factor of 6 for 3-clip videos.
-
-If the total is very large the tool refuses to run without `--limit`, and picks
-a random sample rather than building the whole list in memory.
-
-## Options
-
-Run `videocombiner --help` for the full list. The ones that matter most:
-
-| Option | What it does |
-|---|---|
-| `-i, --input DIR` | Folder to read clips from |
-| `-o, --output DIR` | Folder to write videos to |
-| `-n, --clips N` | Clips per video, default 3 |
-| `-l, --limit N` | Stop after N videos |
-| `--seed N` | Same seed gives the same output set every run |
-| `--mandatory FILE` | Clip that must appear in every video, repeatable |
-| `--unordered` | Treat A,B,C and B,A,C as the same video |
-| `--include` / `--exclude` | Filename patterns, supports `*` and `?` |
-| `--recursive` | Also search subfolders |
-| `--dry-run` | Print the plan without building anything |
-| `-j, --jobs N` | How many ffmpeg processes to run at once |
-| `-s, --size SIZE` | Preset name or WxH, defaults to the largest clip |
-| `--fit MODE` | contain, cover, blur or stretch |
-| `--pad-color COLOR` | Bar colour for contain, default black |
-| `--fps N` | Output frame rate, defaults to the fastest clip |
-| `--container EXT` | mp4, mov, mkv or webm |
-| `--crf N` | Quality, lower is better, default 20 |
-| `--loudness LUFS` | Even out volume between clips, default -14, or `off` |
-| `--name TEMPLATE` | Output filename, see below |
-
-Output names are built from a template. `{names}` is the clip names joined
-together, and `{index}`, `{count}`, `{seed}`, `{first}` and `{last}` are also
-available. The default is `{names}`, so a video is named after what is in it.
-Use `{index}_{names}` if you want them to sort in generation order.
+With n clips and three per video the count is n × (n − 1) × (n − 2). Pass `--unordered` to use each set of clips once instead of in every order. If the total is huge, the tool asks for `--limit` and picks a random sample.
 
 ## Spreadsheet export
 
-If you upload with a script that reads a Google Sheet, the gap between "the
-videos exist" and "the sheet describes them" is the tedious part. `--export`
-closes it:
+`--export shorts.csv` writes a row per video for uploaders that read from a Google Sheet: filename, title, description, tags, scheduled time, playlist and privacy. Titles and descriptions come from template files with placeholders such as `{a}` and `{and}`, and `--schedule-every 8h` spaces the uploads out. The `examples/` folder has working files.
 
-```
-videocombiner -i clips -o shorts --limit 50 \
-    --export shorts.csv --names names.json \
-    --title-variants titles.txt \
-    --schedule-start 2026-09-01T14:00:00Z --schedule-every 8h
-```
+## Mixed footage
 
-That writes one row per video with these columns, ready to paste in:
-
-`Filename`, `Title`, `Description`, `Tags`, `Language`,
-`Scheduled Time (UTC)`, `Status`, `Playlist`, `Subtitle?`, `Localize?`,
-`Privacy`
-
-The Filename column is the actual name written to disk, so the two can never
-drift apart.
-
-It works with `--dry-run`, which means you can build the sheet, read it, and
-only then decide to render.
-
-### Readable names
-
-Clip filenames rarely belong in a title. `--names names.json` maps them:
-
-```json
-{
-  "Zibra_Zubra_Zibralini": "Zibra Zubra Zibralini",
-  "U_din_din_din_dun":     "U Din Din Din Dun"
-}
-```
-
-Without it the tool still tidies underscores into spaces, but the mapping is
-there for when that is not enough.
-
-### Title and description variants
-
-Giving hundreds of videos the same title works against you. Put one template
-per line in a file and each video draws from the pool:
-
-```
-Crushing {and} Under a Hydraulic Press!
-{a} vs {b} vs {c}: Hydraulic Press Edition
-Can {a} Survive the Press? Feat. {b} and {c}
-{a} Gets Flattened, {b} and {c} Are Next
-```
-
-Placeholders:
-
-| Placeholder | Becomes |
-|---|---|
-| `{a}` `{b}` `{c}` | each clip, in play order |
-| `{clip1}` `{clip2}` | the same, numbered |
-| `{names}` | all clips, comma separated |
-| `{and}` | all clips, with "and" before the last |
-| `{filename}` `{index}` `{count}` `{seed}` | the obvious |
-
-The choice is deterministic from the seed, so the same run always produces the
-same titles. Titles longer than 100 characters are cut, since YouTube rejects
-them.
-
-`--description-variants` works the same way for descriptions.
-
-### Scheduling
-
-`--schedule-start` and `--schedule-every` fill the schedule column with spaced
-times, so an uploader that posts the next due video actually spreads them out
-rather than treating every row as due at once.
-
-```
---schedule-start 2026-09-01T14:00:00Z --schedule-every 8h
-```
-
-Durations take `s`, `m`, `h`, `d` or `w`.
-
-### The rest of the columns
-
-`--sheet-tags` sets the tags every row starts with, and each clip's name is
-appended after them unless you pass `--no-clip-tags`. `--sheet-playlist`,
-`--sheet-language`, `--sheet-privacy`, `--sheet-subtitle` and
-`--no-sheet-localize` fill the others.
-
-There are working example files in `examples/`.
-
-## Config file
-
-Flags get tedious once you have settled on your setup. Put a
-`videocombiner.json` next to where you run the tool and it gets picked up
-automatically:
-
-```json
-{
-  "input": "clips",
-  "output": "shorts",
-  "clipsPerVideo": 3,
-  "limit": 50,
-  "seed": 1234,
-  "exclude": ["*draft*"]
-}
-```
-
-Then just run `videocombiner`. Command line options still win over the file, so
-you can override one setting without editing anything.
-
-See `videocombiner.example.json` for every key with comments.
-
-## Clips that do not match
-
-Joining video files without re-encoding only works when they share a resolution,
-frame rate, codec and audio layout. Mixed footage breaks this, usually by
-producing a file that looks fine to the filesystem and plays wrong.
-
-The tool probes every clip first. If they differ, it re-encodes each one to a
-common format once, then joins the combinations without re-encoding. Twenty
-clips means twenty encodes rather than one per output, which is the difference
-between minutes and hours on a large run.
-
-Clips with no audio get a silent track added, because mixing silent and
-non-silent sources is another way the join goes wrong.
-
-Volume is levelled at the same time. Clips recorded separately often sit at
-very different levels, which you hear as a jump at every cut. Each one is
-brought to -14 LUFS, which is what YouTube normalises to, so the finished video
-is consistent. Turn it off with `--no-loudness`.
-
-Levels are only measured when nothing else has already forced a conversion, so
-clips that already sit at the target are left alone rather than re-encoded.
-
-Control it with `--normalize`:
-
-- `auto` is the default and only re-encodes when the clips actually differ
-- `always` re-encodes regardless, useful for forcing a specific resolution
-- `never` joins as-is, fastest, only safe when you know the clips match
+If the clips differ in size, frame rate, codec or audio, each one is converted once to a common format and every video is then joined without re-encoding. Clips without sound get a silent track, and volume is levelled to -14 LUFS so it doesn't jump at the cuts.
 
 ## Building from source
 
-Needs CMake 3.16 or newer and a compiler with C++17 support. No other
-dependencies.
+You need CMake 3.16 or newer and a C++17 compiler. On Windows that can be MSVC or MinGW.
 
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-Binaries land in `build/` or `build/Release/` depending on your generator. On
-Windows this produces both `videocombiner.exe` and `videocombiner-gui.exe`. On
-macOS and Linux it produces the command line tool only, since the window is
-plain Win32.
-
-To build and run the unit tests, which check that the number of videos the tool
-predicts matches what it actually generates:
-
-```
-cmake -S . -B build -DVIDEOCOMBINER_TESTS=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-There is also a test that builds real videos and inspects them, which needs
-ffmpeg:
-
-```
-bash tests/render_smoke.sh build/videocombiner
-```
-
-It makes three clips at different sizes, frame rates and volumes, one of them
-silent, runs the tool, then checks the resolution, duration, audio presence and
-loudness of every output, and that every filename in the exported sheet exists
-on disk. CI runs it on Windows and Linux.
-
-## Requirements
-
-- ffmpeg and ffprobe on your PATH, or pointed at with `--ffmpeg` and `--ffprobe`
-- Enough disk space for the output, which adds up quickly at these counts
+Windows builds give you `videocombiner.exe` and `videocombiner-gui.exe`. For the tests, configure with `-DVIDEOCOMBINER_TESTS=ON` and run `ctest --test-dir build`, and `tests/render_smoke.sh` builds real videos with ffmpeg and checks them.
