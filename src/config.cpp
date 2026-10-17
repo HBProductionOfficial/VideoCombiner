@@ -12,7 +12,7 @@
 
 namespace vc {
 
-const char* kVersion = "2.2.0";
+const char* kVersion = "2.3.0";
 
 int Config::resolvedJobs() const {
     if (jobs > 0) return jobs;
