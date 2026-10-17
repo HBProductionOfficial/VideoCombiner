@@ -1,0 +1,2 @@
+// The ID matches kAppIcon in src/gui_win32.cpp.
+1 ICON "videocombiner.ico"

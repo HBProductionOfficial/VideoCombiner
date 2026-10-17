@@ -1,0 +1,3 @@
+// MSVC picks up the common controls manifest from a #pragma in gui_win32.cpp.
+// MinGW ignores that pragma, so it gets the manifest from here instead.
+1 24 "videocombiner.manifest"

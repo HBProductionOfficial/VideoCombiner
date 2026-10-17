@@ -25,17 +25,23 @@
 #include "plan.hpp"
 #include "util.hpp"
 
+#ifdef _MSC_VER
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "comdlg32.lib")
 
-// Without this the controls render in the pre-XP style.
+// Without this the controls render in the pre-XP style. MinGW builds get the
+// same manifest from res/mingw.rc.
 #pragma comment(linker, "\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#endif
 
 namespace {
+
+const wchar_t kAppName[] = L"Video Combiner";
+constexpr int kAppIcon = 1;  // res/videocombiner.rc
 
 enum : int {
     CTL_INPUT = 1001, CTL_INPUT_BROWSE, CTL_OUTPUT, CTL_OUTPUT_BROWSE,
@@ -359,7 +365,7 @@ public:
 
         vc::Config cfg = readConfig();
         if (cfg.clips.empty()) {
-            MessageBoxW(window, L"Tick at least one clip first.", L"VideoCombiner",
+            MessageBoxW(window, L"Tick at least one clip first.", kAppName,
                         MB_OK | MB_ICONINFORMATION);
             return;
         }
@@ -734,7 +740,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         case WM_CLOSE:
             if (app && app->running) {
                 if (MessageBoxW(window, L"A run is in progress. Stop it and close?",
-                                L"VideoCombiner", MB_YESNO | MB_ICONQUESTION) != IDYES) {
+                                kAppName, MB_YESNO | MB_ICONQUESTION) != IDYES) {
                     return 0;
                 }
                 app->requestStop();
@@ -766,7 +772,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     windowClass.lpszClassName = L"VideoCombinerWindow";
-    windowClass.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(kAppIcon));
+    windowClass.hIconSm = (HICON)LoadImageW(instance, MAKEINTRESOURCEW(kAppIcon), IMAGE_ICON,
+                                            GetSystemMetrics(SM_CXSMICON),
+                                            GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
     RegisterClassExW(&windowClass);
 
     RECT wanted = {0, 0, 700, 745};
@@ -774,12 +783,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
     const DWORD style = (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX);
     AdjustWindowRect(&wanted, style, FALSE);
 
-    HWND window = CreateWindowExW(0, windowClass.lpszClassName, L"VideoCombiner",
+    HWND window = CreateWindowExW(0, windowClass.lpszClassName, kAppName,
                                   style, CW_USEDEFAULT, CW_USEDEFAULT,
                                   wanted.right - wanted.left, wanted.bottom - wanted.top,
                                   nullptr, nullptr, instance, &app);
     if (!window) {
-        MessageBoxW(nullptr, L"Could not create the window.", L"VideoCombiner", MB_ICONERROR);
+        MessageBoxW(nullptr, L"Could not create the window.", kAppName, MB_ICONERROR);
         return 1;
     }
     ShowWindow(window, show);
